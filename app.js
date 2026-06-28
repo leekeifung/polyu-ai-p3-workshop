@@ -73,36 +73,35 @@
     })();
 
     $('verifyBtn').addEventListener('click', async () => {
-      // Prevent clicking if the list hasn't loaded yet
-      if (!isStudentListLoaded) {
-        toast('學生名單載入中，請稍候... Student list is loading, please wait...', 'warn');
-        return;
-      }
+  if (!isStudentListLoaded) {
+    toast('學生名單載入中，請稍候... Student list is loading, please wait...', 'warn');
+    return;
+  }
 
-      const selectedName = $('nameSelect').value;
-      const id = $('studentId').value.trim();
-      const msg = $('verifyMsg');
-      
-      if (!selectedName) { msg.className = 'msg err'; msg.textContent = '⚠️ 請先選擇名字 Please choose your name.'; return; }
-      if (!id) { msg.className = 'msg err'; msg.textContent = '⚠️ 請輸入學生編號 Please enter your ID.'; return; }
+  const selectedId = $('nameSelect').value;   // option value = student id
+  const id = $('studentId').value.trim();
+  const msg = $('verifyMsg');
 
-      $('verifyBtn').disabled = true; msg.className = 'msg'; msg.textContent = '檢查中… Checking…';
+  if (!selectedId) { msg.className = 'msg err'; msg.textContent = '⚠️ 請先選擇名字 Please choose your name.'; return; }
+  if (!id) { msg.className = 'msg err'; msg.textContent = '⚠️ 請輸入學生編號 Please enter your ID.'; return; }
 
-      // Now we safely find the match because isStudentListLoaded is true
-      const match = localStudents.find((s) => String(s.id) === id && s.name === selectedName);
-      $('verifyBtn').disabled = false;
+  $('verifyBtn').disabled = true; msg.className = 'msg'; msg.textContent = '檢查中… Checking…';
 
-      if (match) {
-        verified = { name: match.name, id: match.id };
-        msg.className = 'msg ok'; msg.textContent = '✅ 確認成功 Verified!';
-        $('welcomeMsg').textContent = `你好，${match.name}！🎉 準備好上載你的作品了嗎？`;
-        $('uploadCard').classList.remove('hidden');
-        $('uploadCard').scrollIntoView({ behavior: 'smooth' });
-        refreshSyncButton();
-      } else {
-        msg.className = 'msg err'; msg.textContent = '❌ 名字或編號不正確 Name or ID is incorrect. 請再試一次 Try again.';
-      }
-    });
+  // The chosen name fixes WHICH student; the typed ID must match that student's ID.
+  const match = localStudents.find((s) => String(s.id) === selectedId && String(s.id) === id);
+  $('verifyBtn').disabled = false;
+
+  if (match) {
+    verified = { name: match.name, id: match.id };
+    msg.className = 'msg ok'; msg.textContent = '✅ 確認成功 Verified!';
+    $('welcomeMsg').textContent = `你好，${match.name}！🎉 準備好上載你的作品了嗎？`;
+    $('uploadCard').classList.remove('hidden');
+    $('uploadCard').scrollIntoView({ behavior: 'smooth' });
+    refreshSyncButton();
+  } else {
+    msg.className = 'msg err'; msg.textContent = '❌ 名字或編號不正確 Name or ID is incorrect. 請再試一次 Try again.';
+  }
+});
 
     document.querySelectorAll('.tab').forEach((tab) => {
       tab.addEventListener('click', () => {
