@@ -1,4 +1,3 @@
-<!-- index.html — Student upload page -->
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
@@ -6,14 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PolyU AI 創作坊 · P3 上載平台</title>
   <link rel="stylesheet" href="style.css" />
-  <!-- marked.js (CDN) — used to render the friendly instructions written in Markdown -->
+  <!-- Dependencies -->
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <!-- marked.js (already in your index.html) -->
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-<!-- JSZip & FileSaver (for zero-backend ZIP export) -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
-
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
 </head>
 <body>
   <header class="site-header">
@@ -30,27 +25,21 @@
   </header>
 
   <main class="container">
-    <!-- Friendly instructions (rendered from Markdown by marked.js) -->
     <section id="instructions" class="card instructions"></section>
 
-    <!-- STEP 1 — verify identity -->
     <section id="verifyCard" class="card">
       <h2><span class="step-badge">1</span> 確認身份 · Who are you?</h2>
-
       <label for="nameSelect">選擇你的名字 · Choose your name</label>
       <select id="nameSelect" class="big-input">
         <option value="">— 請選擇 Please choose —</option>
       </select>
-
       <label for="studentId">輸入學生編號 · Enter your Student ID</label>
       <input id="studentId" class="big-input" type="text" inputmode="numeric"
              placeholder="例如 1001" autocomplete="off" maxlength="12" />
-
       <button id="verifyBtn" class="btn btn-primary big-btn">✅ 確認 Verify</button>
       <p id="verifyMsg" class="msg" role="status" aria-live="polite"></p>
     </section>
 
-    <!-- STEP 2 — upload work (hidden until verified) -->
     <section id="uploadCard" class="card hidden">
       <h2><span class="step-badge">2</span> 上載作品 · Upload your work</h2>
       <p class="welcome" id="welcomeMsg"></p>
@@ -82,7 +71,6 @@
         <textarea id="htmlInput" class="code-area" rows="9"
                   placeholder="<h1>Hello! 我是小小程式員 🎨</h1>"></textarea>
         <button id="previewHtmlBtn" type="button" class="btn btn-secondary">👀 預覽 Preview</button>
-        <!-- sandbox="" => fully isolated; CSS renders, scripts cannot run -->
         <iframe id="htmlPreviewFrame" class="html-preview hidden" sandbox title="HTML preview"></iframe>
       </div>
 
