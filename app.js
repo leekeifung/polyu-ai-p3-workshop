@@ -1,6 +1,4 @@
-/* app.js — Zero-Backend Version (Pure Static / GitHub Pages Ready)
- * ⚙️ No server. No Azure. No Vercel. Runs 100% in the browser.
- */
+/* app.js — Zero-Backend Version (Fixed Race Condition) */
 (function () {
   'use strict';
 
@@ -40,9 +38,16 @@
     let mode = 'image';
     let selectedImage = null;
     let localStudents = null;
+    let isStudentListLoaded = false;
 
     (async function loadNames() {
       const select = $('nameSelect');
+      const verifyBtn = $('verifyBtn');
+      
+      // Start in a "Loading" state
+      verifyBtn.disabled = true;
+      verifyBtn.textContent = '⏳ 載入中 Loading...';
+
       try {
         const res = await fetch('students.json');
         if (res.ok) {
@@ -51,19 +56,39 @@
             const o = document.createElement('option');
             o.value = s.id; o.textContent = s.name; select.appendChild(o);
           });
+          
+          // Success: Enable the button
+          isStudentListLoaded = true;
+          verifyBtn.disabled = false;
+          verifyBtn.textContent = '✅ 確認 Verify';
+        } else {
+          throw new Error('Failed to load');
         }
-      } catch { toast('無法載入名單 Could not load name list', 'err'); }
+      } catch (err) {
+        // Failure: Show error
+        toast('無法載入名單 Could not load name list. Please refresh.', 'err');
+        verifyBtn.disabled = false;
+        verifyBtn.textContent = '❌ 載入失敗 Failed';
+      }
     })();
 
     $('verifyBtn').addEventListener('click', async () => {
+      // Prevent clicking if the list hasn't loaded yet
+      if (!isStudentListLoaded) {
+        toast('學生名單載入中，請稍候... Student list is loading, please wait...', 'warn');
+        return;
+      }
+
       const selectedName = $('nameSelect').value;
       const id = $('studentId').value.trim();
       const msg = $('verifyMsg');
+      
       if (!selectedName) { msg.className = 'msg err'; msg.textContent = '⚠️ 請先選擇名字 Please choose your name.'; return; }
       if (!id) { msg.className = 'msg err'; msg.textContent = '⚠️ 請輸入學生編號 Please enter your ID.'; return; }
 
       $('verifyBtn').disabled = true; msg.className = 'msg'; msg.textContent = '檢查中… Checking…';
 
+      // Now we safely find the match because isStudentListLoaded is true
       const match = localStudents.find((s) => String(s.id) === id && s.name === selectedName);
       $('verifyBtn').disabled = false;
 
