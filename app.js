@@ -1,183 +1,88 @@
-/* app.js — Shared frontend logic for BOTH index.html (student) and admin.html.
- * Vanilla JS only. Uses fetch(), FileReader, marked.js (CDN), setInterval (5s polling).
- * The page is auto-detected at the bottom of this file.
+/* app.js — Zero-Backend Version (GitHub Pages Compatible)
+ * ⚙️ No serverless functions. No Azure. No Vercel. Pure static.
+ * 🔗 Works entirely on GitHub Pages + Microsoft OneDrive Web UI.
  */
 (function () {
   'use strict';
 
-  /* =========================================================================
-   * CONFIG
-   * ⬇️ If your frontend (GitHub Pages) and backend (Vercel) are on DIFFERENT
-   *    domains, set API_BASE to your Vercel URL, e.g. 'https://polyu-ai-p3.vercel.app'.
-   *    If everything is deployed together on Vercel, leave it as '' (same origin).
-   * =======================================================================*/
   const CONFIG = {
-    API_BASE: '',
+    ONEDRIVE_FOLDER_URL: 'https://polyuit-my.sharepoint.com/:f:/g/personal/kflee_polyu_edu_hk/IgCJ-KWGOAsrTptAMbuacb_AAU0h9IBf84mQzXxYRgLjOgM',
+    SUBMISSIONS_JSON: 'submissions.json',
     POLL_INTERVAL_MS: 5000,
-    MAX_IMAGE_DIMENSION: 1920, // px — images larger than this are downscaled
-    IMAGE_QUALITY: 0.85,       // JPEG quality after resize
-    MAX_FILE_BYTES: 10 * 1024 * 1024 // 10 MB hard limit (matches backend)
+    MAX_IMAGE_DIMENSION: 1920,
+    IMAGE_QUALITY: 0.85,
+    MAX_FILE_BYTES: 10 * 1024 * 1024
   };
 
-  /* ---------------- Shared utilities ---------------- */
   const $ = (id) => document.getElementById(id);
-  const apiUrl = (p) => (CONFIG.API_BASE ? CONFIG.API_BASE.replace(/\/$/, '') : '') + p;
-
-  function toast(message, type) {
+  const toast = (msg, type) => {
     const el = $('toast');
     if (!el) return;
-    el.textContent = message;
+    el.textContent = msg;
     el.className = 'toast show ' + (type || '');
     clearTimeout(toast._t);
     toast._t = setTimeout(() => { el.className = 'toast hidden'; }, 3800);
-  }
+  };
 
   function escapeHtml(s) {
-    return String(s == null ? '' : s)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
-
-  function renderMarkdown(md) {
-    if (window.marked) return (marked.parse ? marked.parse(md) : marked(md));
-    return escapeHtml(md).replace(/\n/g, '<br>');
-  }
-
-  async function postJSON(path, body, timeoutMs = 30000) {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), timeoutMs);
-    try {
-      const res = await fetch(apiUrl(path), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: ctrl.signal
-      });
-      const data = await res.json().catch(() => ({}));
-      return { ok: res.ok, status: res.status, data };
-    } finally { clearTimeout(t); }
-  }
-
-  /* Downscale an image File using <canvas>. Returns { dataUrl, mime, size }. */
-  function processImage(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onerror = () => reject(new Error('讀取檔案失敗 File read error'));
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onerror = () => reject(new Error('圖片格式不支援 Unsupported image'));
-        img.onload = () => {
-          let { width, height } = img;
-          const max = CONFIG.MAX_IMAGE_DIMENSION;
-          if (width > max || height > max) {
-            const scale = Math.min(max / width, max / height);
-            width = Math.round(width * scale);
-            height = Math.round(height * scale);
-          }
-          const canvas = document.createElement('canvas');
-          canvas.width = width; canvas.height = height;
-          canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-          // Keep PNG (transparency) if it stays small, else JPEG to save space.
-          let mime = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
-          let dataUrl = canvas.toDataURL(mime, CONFIG.IMAGE_QUALITY);
-          if (mime === 'image/png' && dataUrl.length > 3.2 * 1024 * 1024) {
-            mime = 'image/jpeg';
-            dataUrl = canvas.toDataURL(mime, CONFIG.IMAGE_QUALITY);
-          }
-          const size = Math.round((dataUrl.length - (dataUrl.indexOf(',') + 1)) * 3 / 4);
-          resolve({ dataUrl, mime, size });
-        };
-        img.src = e.target.result;
-      };
-      reader.readAsDataURL(file);
-    });
-  }
-
-  /* localStorage fallback queue (used when the API is unreachable) */
-  const QUEUE_KEY = 'polyu_pending_submissions';
-  function readQueue() { try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]'); } catch { return []; } }
-  function writeQueue(q) { try { localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); } catch { /* sandbox may block */ } }
 
   /* =========================================================================
    * STUDENT PAGE
-   * =======================================================================*/
+   * =========================================================================*/
   function initStudentPage() {
     const INSTRUCTIONS_MD = [
       '### 👋 歡迎來到 AI 創作坊！',
       '1. **選擇你的名字**，再輸入老師給你的**學生編號**。',
       '2. 上載你用 AI 製作的**圖片** 🖼️，或貼上你的 **HTML 程式碼** 💻。',
-      '3. 按 **提交** 🚀 — 完成啦！'
+      '3. 按 **提交** 🚀 — 完成啦！作品會儲存在本機，並可一鍵同步至 OneDrive。'
     ].join('\n');
-    $('instructions').innerHTML = renderMarkdown(INSTRUCTIONS_MD);
+    $('instructions').innerHTML = marked.parse ? marked.parse(INSTRUCTIONS_MD) : escapeHtml(INSTRUCTIONS_MD).replace(/\n/g, '<br>');
 
-    let verified = null;          // { name, id }
-    let mode = 'image';           // 'image' | 'html'
-    let selectedImage = null;     // { dataUrl, mime, size }
-    let localStudents = null;     // full list (fallback verify)
+    let verified = null;
+    let mode = 'image';
+    let selectedImage = null;
+    let localStudents = null;
 
-    /* --- Populate name dropdown (API → fallback to students.json) --- */
     (async function loadNames() {
       const select = $('nameSelect');
-      let names = [];
       try {
-        const res = await fetch(apiUrl('/api/students'));
-        if (res.ok) names = (await res.json()).map((s) => s.name);
-      } catch { /* fall through */ }
-      if (!names.length) {
-        try {
-          const res = await fetch('students.json');
+        const res = await fetch('students.json');
+        if (res.ok) {
           localStudents = await res.json();
-          names = localStudents.map((s) => s.name);
-        } catch { toast('無法載入名單 Could not load name list', 'err'); }
-      }
-      names.forEach((n) => {
-        const o = document.createElement('option');
-        o.value = n; o.textContent = n; select.appendChild(o);
-      });
+          localStudents.forEach((s) => {
+            const o = document.createElement('option');
+            o.value = s.id; o.textContent = s.name; select.appendChild(o);
+          });
+        }
+      } catch { toast('無法載入名單 Could not load name list', 'err'); }
     })();
 
-    async function ensureLocalStudents() {
-      if (localStudents) return localStudents;
-      try { localStudents = await (await fetch('students.json')).json(); } catch { localStudents = []; }
-      return localStudents;
-    }
-
-    /* --- Verify --- */
     $('verifyBtn').addEventListener('click', async () => {
-      const name = $('nameSelect').value.trim();
+      const selectedName = $('nameSelect').value;
       const id = $('studentId').value.trim();
       const msg = $('verifyMsg');
-      if (!name) { msg.className = 'msg err'; msg.textContent = '⚠️ 請先選擇名字 Please choose your name.'; return; }
+      if (!selectedName) { msg.className = 'msg err'; msg.textContent = '⚠️ 請先選擇名字 Please choose your name.'; return; }
       if (!id) { msg.className = 'msg err'; msg.textContent = '⚠️ 請輸入學生編號 Please enter your ID.'; return; }
 
-      $('verifyBtn').disabled = true;
-      msg.className = 'msg'; msg.textContent = '檢查中… Checking…';
+      $('verifyBtn').disabled = true; msg.className = 'msg'; msg.textContent = '檢查中… Checking…';
 
-      let valid = false;
-      try {
-        const r = await postJSON('/api/verify', { name, studentId: id });
-        valid = !!(r.data && r.data.valid);
-      } catch {
-        // Fallback: verify against local students.json
-        const list = await ensureLocalStudents();
-        valid = list.some((s) => String(s.id) === id && s.name === name);
-      }
+      const match = localStudents.find((s) => String(s.id) === id && s.name === selectedName);
       $('verifyBtn').disabled = false;
 
-      if (valid) {
-        verified = { name, id };
+      if (match) {
+        verified = { name: match.name, id: match.id };
         msg.className = 'msg ok'; msg.textContent = '✅ 確認成功 Verified!';
-        $('welcomeMsg').textContent = `你好，${name}！🎉 準備好上載你的作品了嗎？`;
+        $('welcomeMsg').textContent = `你好，${match.name}！🎉 準備好上載你的作品了嗎？`;
         $('uploadCard').classList.remove('hidden');
         $('uploadCard').scrollIntoView({ behavior: 'smooth' });
         refreshSyncButton();
       } else {
-        msg.className = 'msg err';
-        msg.textContent = '❌ 名字或編號不正確 Name or ID is incorrect. 請再試一次 Try again.';
+        msg.className = 'msg err'; msg.textContent = '❌ 名字或編號不正確 Name or ID is incorrect. 請再試一次 Try again.';
       }
     });
 
-    /* --- Tab switching --- */
     document.querySelectorAll('.tab').forEach((tab) => {
       tab.addEventListener('click', () => {
         document.querySelectorAll('.tab').forEach((t) => t.classList.remove('active'));
@@ -188,7 +93,6 @@
       });
     });
 
-    /* --- Image: drag & drop + picker --- */
     const dz = $('dropZone');
     $('pickFileBtn').addEventListener('click', () => $('fileInput').click());
     dz.addEventListener('click', (e) => { if (e.target === dz || e.target.closest('.dz-title, .dz-icon')) $('fileInput').click(); });
@@ -202,91 +106,99 @@
       if (!file.type.startsWith('image/')) { toast('請選擇圖片檔案 Please choose an image', 'err'); return; }
       if (file.size > CONFIG.MAX_FILE_BYTES) { toast('檔案太大（最大 10MB）File too large', 'err'); return; }
       try {
-        selectedImage = await processImage(file);
-        selectedImage.fileName = file.name;
-        $('previewImg').src = selectedImage.dataUrl;
-        $('fileInfo').textContent = `${file.name} · ${(selectedImage.size / 1024).toFixed(0)} KB`;
-        $('imagePreview').classList.remove('hidden');
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            let { width, height } = img;
+            const max = CONFIG.MAX_IMAGE_DIMENSION;
+            if (width > max || height > max) { const scale = Math.min(max / width, max / height); width = Math.round(width * scale); height = Math.round(height * scale); }
+            const canvas = document.createElement('canvas');
+            canvas.width = width; canvas.height = height;
+            canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+            const mime = file.type === 'image/png' && (width <= 1600 && height <= 1600) ? 'image/png' : 'image/jpeg';
+            const dataUrl = canvas.toDataURL(mime, CONFIG.IMAGE_QUALITY);
+            const size = Math.round((dataUrl.length - (dataUrl.indexOf(',') + 1)) * 3 / 4);
+            selectedImage = { dataUrl, mime, size, fileName: file.name };
+            $('previewImg').src = dataUrl;
+            $('fileInfo').textContent = `${file.name} · ${(size / 1024).toFixed(0)} KB`;
+            $('imagePreview').classList.remove('hidden');
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
       } catch (err) { toast(err.message, 'err'); }
     }
-    $('clearImageBtn').addEventListener('click', () => {
-      selectedImage = null; $('fileInput').value = '';
-      $('imagePreview').classList.add('hidden'); $('previewImg').src = '';
-    });
 
-    /* --- HTML preview (sandboxed iframe) --- */
-    $('previewHtmlBtn').addEventListener('click', () => {
-      const code = $('htmlInput').value;
-      const frame = $('htmlPreviewFrame');
-      frame.srcdoc = code;            // sandbox="" => isolated, scripts won't run
-      frame.classList.remove('hidden');
-    });
+    $('clearImageBtn').addEventListener('click', () => { selectedImage = null; $('fileInput').value = ''; $('imagePreview').classList.add('hidden'); $('previewImg').src = ''; });
+    $('previewHtmlBtn').addEventListener('click', () => { $('htmlPreviewFrame').srcdoc = $('htmlInput').value; $('htmlPreviewFrame').classList.remove('hidden'); });
 
-    /* --- Submit --- */
     $('submitBtn').addEventListener('click', submit);
 
     async function submit() {
       if (!verified) { toast('請先確認身份 Please verify first', 'err'); return; }
-
       let payload;
       if (mode === 'image') {
         if (!selectedImage) { toast('請先選擇圖片 Please choose an image', 'err'); return; }
-        payload = { name: verified.name, studentId: verified.id, type: 'image',
-                    fileName: selectedImage.fileName, base64Data: selectedImage.dataUrl };
+        payload = { name: verified.name, studentId: verified.id, type: 'image', fileName: selectedImage.fileName, base64Data: selectedImage.dataUrl, savedAt: Date.now() };
       } else {
         const content = $('htmlInput').value.trim();
         if (!content) { toast('請先貼上程式碼 Please paste your code', 'err'); return; }
-        payload = { name: verified.name, studentId: verified.id, type: 'html', content };
+        payload = { name: verified.name, studentId: verified.id, type: 'html', content, savedAt: Date.now() };
       }
 
       const btn = $('submitBtn');
       btn.disabled = true; const label = btn.textContent; btn.textContent = '上載中… Uploading…';
 
       try {
-        const r = await postJSON('/api/upload', payload);
-        if (r.ok && r.data && r.data.success) {
-          toast(`🎉 成功提交！Submission ID: ${r.data.id ? String(r.data.id).slice(-6) : 'OK'}`, 'ok');
-          resetAfterSubmit();
-        } else {
-          throw new Error((r.data && r.data.error) || ('HTTP ' + r.status));
-        }
-      } catch (err) {
-        // Graceful fallback → store locally, offer "Sync Later"
-        const q = readQueue(); q.push({ ...payload, savedAt: Date.now() }); writeQueue(q);
-        toast('⚠️ 暫時無法連線，已儲存在本機。Saved locally — use “Sync Later”.', 'warn');
+        const q = readQueue(); q.push(payload); writeQueue(q);
+        toast('✅ 已儲存至本機！已觸發 OneDrive 上載視窗。Saved locally. OneDrive upload window opened.', 'ok');
+        // Trigger OneDrive native web upload
+        window.open(CONFIG.ONEDRIVE_FOLDER_URL, '_blank');
+        resetAfterSubmit();
         refreshSyncButton();
-      } finally {
-        btn.disabled = false; btn.textContent = label;
-      }
+      } catch (err) { toast('⚠️ 上載失敗。請手動重新提交。', 'err'); }
+      finally { btn.disabled = false; btn.textContent = label; }
     }
 
-    function resetAfterSubmit() {
-      selectedImage = null; $('fileInput').value = '';
-      $('imagePreview').classList.add('hidden'); $('previewImg').src = '';
-      $('htmlInput').value = ''; $('htmlPreviewFrame').classList.add('hidden');
-    }
+    function resetAfterSubmit() { selectedImage = null; $('fileInput').value = ''; $('imagePreview').classList.add('hidden'); $('previewImg').src = ''; $('htmlInput').value = ''; $('htmlPreviewFrame').classList.add('hidden'); }
 
-    /* --- "Sync Later" for queued submissions --- */
+    const QUEUE_KEY = 'polyu_pending_submissions';
+    function readQueue() { try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]'); } catch { return []; } }
+    function writeQueue(q) { try { localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); } catch { /* sandbox may block */ } }
+
     function refreshSyncButton() {
       const q = readQueue();
       const btn = $('syncBtn');
-      if (q.length) { btn.classList.remove('hidden'); btn.textContent = `🔁 同步 ${q.length} 個待上載作品 Sync ${q.length} pending`; }
-      else btn.classList.add('hidden');
+      if (q.length) { btn.classList.remove('hidden'); btn.textContent = `🔁 同步並匯出 ZIP Sync ${q.length} pending`; } else btn.classList.add('hidden');
     }
+
     $('syncBtn').addEventListener('click', async () => {
       let q = readQueue(); if (!q.length) return;
       $('syncBtn').disabled = true;
-      const remaining = [];
-      for (const item of q) {
-        try {
-          const r = await postJSON('/api/upload', item);
-          if (!(r.ok && r.data && r.data.success)) remaining.push(item);
-        } catch { remaining.push(item); }
-      }
-      writeQueue(remaining);
+      try {
+        // Dynamically load JSZip & FileSaver from CDN
+        const zipScript = document.createElement('script'); zipScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+        const fileSaverScript = document.createElement('script'); fileSaverScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js';
+        await Promise.all([new Promise(r => { zipScript.onload = r; document.head.appendChild(zipScript); }), new Promise(r => { fileSaverScript.onload = r; document.head.appendChild(fileSaverScript); })]);
+
+        const zip = new JSZip();
+        q.forEach((item, i) => {
+          const dir = zip.folder(item.studentId + '__' + item.name);
+          if (item.type === 'image') {
+            const fileName = item.fileName || `${item.studentId}_${i}.jpg`;
+            dir.file(fileName, item.base64Data.split(',')[1], { base64: true });
+          } else {
+            dir.file(`${item.studentId}_${i}.html`, item.content);
+          }
+        });
+        const content = await zip.generateAsync({ type: 'blob' });
+        saveAs(content, `polyu_submissions_${new Date().toISOString().slice(0, 10)}.zip`);
+        writeQueue([]);
+        refreshSyncButton();
+        toast('✅ ZIP 已下載！請將檔案拖入 OneDrive 資料夾。', 'ok');
+      } catch (err) { toast('匯出失敗 Export failed', 'err'); }
       $('syncBtn').disabled = false;
-      refreshSyncButton();
-      toast(remaining.length ? `仍有 ${remaining.length} 個未能上載` : '✅ 全部已同步！All synced!', remaining.length ? 'warn' : 'ok');
     });
 
     refreshSyncButton();
@@ -294,17 +206,17 @@
 
   /* =========================================================================
    * ADMIN PAGE
-   * =======================================================================*/
+   * =========================================================================*/
   function initAdminPage() {
     let timer = null;
-    let current = [];
+    let submissions = [];
 
     async function fetchSubmissions() {
       try {
-        const res = await fetch(apiUrl('/api/submissions'));
+        const res = await fetch(CONFIG.SUBMISSIONS_JSON);
         if (!res.ok) throw new Error('HTTP ' + res.status);
-        current = await res.json();
-        render(current);
+        submissions = await res.json();
+        render(submissions);
         $('lastUpdated').textContent = '更新於 ' + new Date().toLocaleTimeString('zh-HK');
       } catch (err) {
         $('lastUpdated').textContent = '⚠️ 連線失敗 — 將重試';
@@ -320,8 +232,6 @@
       rows.forEach((r) => {
         if (r.type === 'image') imgN++; else htmlN++;
         const tr = document.createElement('tr');
-
-        // Preview cell
         const previewTd = document.createElement('td');
         if (r.type === 'image') {
           const img = document.createElement('img');
@@ -337,21 +247,21 @@
           previewTd.appendChild(box);
         }
         tr.appendChild(previewTd);
-
         tr.appendChild(cell(escapeHtml(r.studentName)));
         tr.appendChild(cell(escapeHtml(r.studentId)));
         tr.appendChild(cell(`<span class="badge ${r.type}">${r.type === 'image' ? '🖼️ 圖片' : '💻 HTML'}</span>`, true));
-        tr.appendChild(cell(escapeHtml(new Date(r.createdDateTime).toLocaleString('zh-HK'))));
-
+        tr.appendChild(cell(escapeHtml(new Date(r.savedAt || Date.now()).toLocaleString('zh-HK'))));
         const actions = document.createElement('td');
         actions.innerHTML = `<div class="row-actions">
             <button class="btn btn-secondary" data-act="view">👀 View</button>
-            <a class="btn btn-primary" href="${escapeHtml(r.downloadUrl || '#')}" download="${escapeHtml(r.fileName)}">⬇️ Download</a>
+            <button class="btn btn-primary" data-act="download">⬇️ Download</button>
           </div>`;
-        actions.querySelector('[data-act="view"]').addEventListener('click', () =>
-          r.type === 'image' ? openImageModal(r) : openHtmlModal(r));
+        actions.querySelector('[data-act="view"]').addEventListener('click', () => r.type === 'image' ? openImageModal(r) : openHtmlModal(r));
+        actions.querySelector('[data-act="download"]').addEventListener('click', () => {
+          const blob = new Blob([r.type === 'image' ? atob(r.base64Data.split(',')[1]) : r.content], { type: r.type === 'image' ? r.mime || 'image/jpeg' : 'text/html' });
+          const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${r.studentId}_${r.name}.${r.type === 'image' ? 'jpg' : 'html'}`; a.click(); URL.revokeObjectURL(a.href);
+        });
         tr.appendChild(actions);
-
         body.appendChild(tr);
       });
 
@@ -360,53 +270,37 @@
       $('statHtml').textContent = htmlN;
     }
 
-    function cell(html, isHtml) {
-      const td = document.createElement('td');
-      if (isHtml) td.innerHTML = html; else td.textContent = html.replace(/&[a-z#0-9]+;/g, (m) => m); // already escaped
-      if (!isHtml) td.innerHTML = html;
-      return td;
-    }
+    function cell(html, isHtml) { const td = document.createElement('td'); if (isHtml) td.innerHTML = html; else td.textContent = html.replace(/&[a-z#0-9]+;/g, (m) => m); if (!isHtml) td.innerHTML = html; return td; }
 
-    /* --- Modals --- */
     function openImageModal(r) {
       $('modalTitle').textContent = `${r.studentName} (${r.studentId})`;
-      $('modalContent').innerHTML = `<img src="${escapeHtml(r.downloadUrl || r.thumbnailUrl)}" alt="${escapeHtml(r.studentName)}">`;
+      $('modalContent').innerHTML = `<img src="${escapeHtml(r.base64Data || r.downloadUrl || r.thumbnailUrl)}" alt="${escapeHtml(r.studentName)}">`;
       $('modal').classList.remove('hidden');
     }
-    async function openHtmlModal(r) {
+
+    function openHtmlModal(r) {
       $('modalTitle').textContent = `${r.studentName} (${r.studentId})`;
       $('modalContent').innerHTML = '載入中… Loading…';
       $('modal').classList.remove('hidden');
-      let html = '<p class="muted">無法載入內容</p>';
-      try {
-        // Proxy through our API to avoid cross-origin issues
-        const res = await fetch(apiUrl('/api/file?id=' + encodeURIComponent(r.id)));
-        if (res.ok) html = await res.text();
-      } catch { /* keep fallback */ }
       const frame = document.createElement('iframe');
-      frame.setAttribute('sandbox', ''); // isolated render
-      frame.srcdoc = html;
+      frame.setAttribute('sandbox', '');
+      frame.srcdoc = r.content || '<p class="muted">無法載入內容</p>';
       $('modalContent').innerHTML = '';
       $('modalContent').appendChild(frame);
     }
+
     $('modalClose').addEventListener('click', () => $('modal').classList.add('hidden'));
     $('modal').addEventListener('click', (e) => { if (e.target === $('modal')) $('modal').classList.add('hidden'); });
 
-    /* --- CSV export --- */
     $('exportBtn').addEventListener('click', () => {
-      const headers = ['Name', 'StudentID', 'Type', 'FileName', 'Time', 'DownloadURL'];
+      const headers = ['Name', 'StudentID', 'Type', 'FileName', 'Time'];
       const csvEscape = (v) => { v = String(v == null ? '' : v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
       const lines = [headers.join(',')];
-      current.forEach((r) => lines.push([r.studentName, r.studentId, r.type, r.fileName, r.createdDateTime, r.downloadUrl || ''].map(csvEscape).join(',')));
+      submissions.forEach((r) => lines.push([r.studentName, r.studentId, r.type, r.fileName || 'N/A', r.savedAt].map(csvEscape).join(',')));
       const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `polyu_submissions_${new Date().toISOString().slice(0, 10)}.csv`;
-      document.body.appendChild(a); a.click(); a.remove();
-      URL.revokeObjectURL(a.href);
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `polyu_submissions_${new Date().toISOString().slice(0, 10)}.csv`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
     });
 
-    /* --- Polling control --- */
     function startTimer() { stopTimer(); timer = setInterval(fetchSubmissions, CONFIG.POLL_INTERVAL_MS); }
     function stopTimer() { if (timer) clearInterval(timer); timer = null; }
     $('autoRefresh').addEventListener('change', (e) => { e.target.checked ? startTimer() : stopTimer(); });
@@ -416,9 +310,6 @@
     startTimer();
   }
 
-  /* =========================================================================
-   * BOOT — detect which page we are on
-   * =======================================================================*/
   document.addEventListener('DOMContentLoaded', () => {
     if ($('verifyCard')) initStudentPage();
     if ($('subsBody')) initAdminPage();
