@@ -1,6 +1,5 @@
-/* app.js — Zero-Backend Version (GitHub Pages Compatible)
- * ⚙️ No serverless functions. No Azure. No Vercel. Pure static.
- * 🔗 Works entirely on GitHub Pages + Microsoft OneDrive Web UI.
+/* app.js — Zero-Backend Version (Pure Static / GitHub Pages Ready)
+ * ⚙️ No server. No Azure. No Vercel. Runs 100% in the browser.
  */
 (function () {
   'use strict';
@@ -8,10 +7,7 @@
   const CONFIG = {
     ONEDRIVE_FOLDER_URL: 'https://polyuit-my.sharepoint.com/:f:/g/personal/kflee_polyu_edu_hk/IgCJ-KWGOAsrTptAMbuacb_AAU0h9IBf84mQzXxYRgLjOgM',
     SUBMISSIONS_JSON: 'submissions.json',
-    POLL_INTERVAL_MS: 5000,
-    MAX_IMAGE_DIMENSION: 1920,
-    IMAGE_QUALITY: 0.85,
-    MAX_FILE_BYTES: 10 * 1024 * 1024
+    POLL_INTERVAL_MS: 5000
   };
 
   const $ = (id) => document.getElementById(id);
@@ -36,7 +32,7 @@
       '### 👋 歡迎來到 AI 創作坊！',
       '1. **選擇你的名字**，再輸入老師給你的**學生編號**。',
       '2. 上載你用 AI 製作的**圖片** 🖼️，或貼上你的 **HTML 程式碼** 💻。',
-      '3. 按 **提交** 🚀 — 完成啦！作品會儲存在本機，並可一鍵同步至 OneDrive。'
+      '3. 按 **提交** 🚀 — 完成啦！'
     ].join('\n');
     $('instructions').innerHTML = marked.parse ? marked.parse(INSTRUCTIONS_MD) : escapeHtml(INSTRUCTIONS_MD).replace(/\n/g, '<br>');
 
@@ -104,30 +100,27 @@
 
     async function handleFile(file) {
       if (!file.type.startsWith('image/')) { toast('請選擇圖片檔案 Please choose an image', 'err'); return; }
-      if (file.size > CONFIG.MAX_FILE_BYTES) { toast('檔案太大（最大 10MB）File too large', 'err'); return; }
-      try {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const img = new Image();
-          img.onload = () => {
-            let { width, height } = img;
-            const max = CONFIG.MAX_IMAGE_DIMENSION;
-            if (width > max || height > max) { const scale = Math.min(max / width, max / height); width = Math.round(width * scale); height = Math.round(height * scale); }
-            const canvas = document.createElement('canvas');
-            canvas.width = width; canvas.height = height;
-            canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-            const mime = file.type === 'image/png' && (width <= 1600 && height <= 1600) ? 'image/png' : 'image/jpeg';
-            const dataUrl = canvas.toDataURL(mime, CONFIG.IMAGE_QUALITY);
-            const size = Math.round((dataUrl.length - (dataUrl.indexOf(',') + 1)) * 3 / 4);
-            selectedImage = { dataUrl, mime, size, fileName: file.name };
-            $('previewImg').src = dataUrl;
-            $('fileInfo').textContent = `${file.name} · ${(size / 1024).toFixed(0)} KB`;
-            $('imagePreview').classList.remove('hidden');
-          };
-          img.src = e.target.result;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let { width, height } = img;
+          const max = 1920;
+          if (width > max || height > max) { const scale = Math.min(max / width, max / height); width = Math.round(width * scale); height = Math.round(height * scale); }
+          const canvas = document.createElement('canvas');
+          canvas.width = width; canvas.height = height;
+          canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+          const mime = file.type === 'image/png' && (width <= 1600 && height <= 1600) ? 'image/png' : 'image/jpeg';
+          const dataUrl = canvas.toDataURL(mime, 0.85);
+          const size = Math.round((dataUrl.length - (dataUrl.indexOf(',') + 1)) * 3 / 4);
+          selectedImage = { dataUrl, mime, size, fileName: file.name };
+          $('previewImg').src = dataUrl;
+          $('fileInfo').textContent = `${file.name} · ${(size / 1024).toFixed(0)} KB`;
+          $('imagePreview').classList.remove('hidden');
         };
-        reader.readAsDataURL(file);
-      } catch (err) { toast(err.message, 'err'); }
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
     }
 
     $('clearImageBtn').addEventListener('click', () => { selectedImage = null; $('fileInput').value = ''; $('imagePreview').classList.add('hidden'); $('previewImg').src = ''; });
@@ -152,8 +145,7 @@
 
       try {
         const q = readQueue(); q.push(payload); writeQueue(q);
-        toast('✅ 已儲存至本機！已觸發 OneDrive 上載視窗。Saved locally. OneDrive upload window opened.', 'ok');
-        // Trigger OneDrive native web upload
+        toast('✅ 已儲存至本機！已觸發 OneDrive 上載視窗。Saved locally. OneDrive window opened.', 'ok');
         window.open(CONFIG.ONEDRIVE_FOLDER_URL, '_blank');
         resetAfterSubmit();
         refreshSyncButton();
@@ -177,7 +169,6 @@
       let q = readQueue(); if (!q.length) return;
       $('syncBtn').disabled = true;
       try {
-        // Dynamically load JSZip & FileSaver from CDN
         const zipScript = document.createElement('script'); zipScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
         const fileSaverScript = document.createElement('script'); fileSaverScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js';
         await Promise.all([new Promise(r => { zipScript.onload = r; document.head.appendChild(zipScript); }), new Promise(r => { fileSaverScript.onload = r; document.head.appendChild(fileSaverScript); })]);
